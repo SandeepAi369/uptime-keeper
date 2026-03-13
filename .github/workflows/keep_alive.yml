@@ -1,7 +1,7 @@
 # ============================================================
 #  🤖 Keep Bot Alive — GitHub Actions Workflow
 # ============================================================
-#  Pings the Render-hosted bot every 3 hours to prevent the
+#  Pings the Render-hosted bot every 1 hours to prevent the
 #  free-tier server from spinning down due to inactivity.
 #
 #  Security: The target URL is stored as a GitHub Secret
@@ -11,7 +11,7 @@
 name: "🤖 Keep Bot Alive"
 
 on:
-  # ── Scheduled trigger: every 3 hours ──
+  # ── Scheduled trigger: every 1 hours ──
   schedule:
     - cron: "0 */3 * * *"
 
@@ -48,3 +48,4 @@ jobs:
         env:
           RENDER_URL: ${{ secrets.RENDER_URL }}
         run: python main.py
+
