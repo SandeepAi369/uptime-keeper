@@ -1,6 +1,6 @@
 # 🤖 Uptime Keeper
 
-[![Keep Bot Alive](https://github.com/Sandeepchch/uptime-keeper/actions/workflows/keep_alive.yml/badge.svg)](https://github.com/Sandeepchch/uptime-keeper/actions/workflows/keep_alive.yml)
+[![Keep Bot Alive](https://github.com/SandeepAi369/uptime-keeper/actions/workflows/keep_alive.yml/badge.svg)](https://github.com/SandeepAi369/uptime-keeper/actions/workflows/keep_alive.yml)
 
 > A **self-healing automation system** that keeps your Render free-tier services alive using GitHub Actions.
 
@@ -51,7 +51,7 @@ uptime-keeper/
 ### 1. Fork or Clone
 
 ```bash
-git clone https://github.com/Sandeepchch/uptime-keeper.git
+git clone https://github.com/SandeepAi369/uptime-keeper.git
 ```
 
 ### 2. Add Your Render URL as a GitHub Secret
