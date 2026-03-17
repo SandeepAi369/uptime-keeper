@@ -23,9 +23,9 @@ import requests
 # ──────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────
-MAX_RETRIES = 3
-INITIAL_BACKOFF_SECONDS = 5
-REQUEST_TIMEOUT_SECONDS = 60
+MAX_RETRIES = 20
+FIXED_BACKOFF_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = 30
 ENV_VAR_NAME = "RENDER_URL"
 
 # ──────────────────────────────────────────────
@@ -50,7 +50,7 @@ def ping_service(url: str) -> bool:
         True if a successful response (2xx) was received, False otherwise.
     """
     for attempt in range(1, MAX_RETRIES + 1):
-        backoff = INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1))
+        backoff = FIXED_BACKOFF_SECONDS
 
         try:
             logger.info(
