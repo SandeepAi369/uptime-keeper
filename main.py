@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-Uptime Keeper - Self-Healing Ping Script
+Uptime Keeper - Multi-Service Ping Script
 ==========================================
-Keeps Render free-tier services alive by sending periodic HTTP pings.
+Keeps free-tier services alive by sending periodic HTTP pings.
 Designed to run via GitHub Actions on a cron schedule.
 
+Supports multiple services:
+  - RENDER_URL: Render free-tier backend
+  - HF_SPACE_URL: HuggingFace Space (search engine)
+  - Any additional *_URL env vars
+
 Features:
-  - Secure: reads URL from environment variable (GitHub Secret)
-  - Reliable: retry logic with exponential backoff (3 attempts)
-  - Observable: structured logging with timestamps, status codes, response times
-  - Fail-safe: graceful error handling for all network failure modes
+  - Multi-target: pings all configured services independently
+  - Reliable: retry logic with backoff (3 attempts per service)
+  - Observable: structured logging with timestamps and response times
+  - Fail-safe: one service failing doesn't block others
 """
 
 import os
@@ -23,10 +28,12 @@ import requests
 # ──────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────
-MAX_RETRIES = 20
-FIXED_BACKOFF_SECONDS = 30
+MAX_RETRIES = 3
+FIXED_BACKOFF_SECONDS = 10
 REQUEST_TIMEOUT_SECONDS = 30
-ENV_VAR_NAME = "RENDER_URL"
+
+# All env vars that contain URLs to ping
+URL_ENV_VARS = ["RENDER_URL", "HF_SPACE_URL"]
 
 # ──────────────────────────────────────────────
 # Logging Setup
@@ -39,25 +46,22 @@ logging.basicConfig(
 logger = logging.getLogger("uptime-keeper")
 
 
-def ping_service(url: str) -> bool:
+def ping_service(name: str, url: str) -> bool:
     """
     Send a GET request to the target URL with retry logic.
 
     Args:
+        name: Human-readable service name for logging.
         url: The service URL to ping.
 
     Returns:
         True if a successful response (2xx) was received, False otherwise.
     """
     for attempt in range(1, MAX_RETRIES + 1):
-        backoff = FIXED_BACKOFF_SECONDS
-
         try:
             logger.info(
-                "Attempt %d/%d — Pinging: %s",
-                attempt,
-                MAX_RETRIES,
-                url,
+                "[%s] Attempt %d/%d — Pinging: %s",
+                name, attempt, MAX_RETRIES, url,
             )
 
             start_time = time.monotonic()
@@ -66,81 +70,76 @@ def ping_service(url: str) -> bool:
 
             if response.ok:
                 logger.info(
-                    "✅ Success | Status: %d | Response Time: %.0f ms",
-                    response.status_code,
-                    elapsed_ms,
+                    "[%s] ✅ UP | Status: %d | Time: %.0f ms",
+                    name, response.status_code, elapsed_ms,
                 )
                 return True
             else:
                 logger.warning(
-                    "⚠️  Unexpected Status | Code: %d | Response Time: %.0f ms",
-                    response.status_code,
-                    elapsed_ms,
+                    "[%s] ⚠️  Status: %d | Time: %.0f ms",
+                    name, response.status_code, elapsed_ms,
                 )
 
         except requests.exceptions.ConnectionError:
-            logger.error(
-                "🔌 Connection Error on attempt %d/%d — server may be down.",
-                attempt,
-                MAX_RETRIES,
-            )
+            logger.error("[%s] 🔌 Connection Error (attempt %d)", name, attempt)
         except requests.exceptions.Timeout:
-            logger.error(
-                "⏱️  Timeout on attempt %d/%d — no response within %ds.",
-                attempt,
-                MAX_RETRIES,
-                REQUEST_TIMEOUT_SECONDS,
-            )
+            logger.error("[%s] ⏱️  Timeout (attempt %d)", name, attempt)
         except requests.exceptions.RequestException as exc:
-            logger.error(
-                "❌ Request Failed on attempt %d/%d — %s",
-                attempt,
-                MAX_RETRIES,
-                exc,
-            )
+            logger.error("[%s] ❌ Error (attempt %d): %s", name, attempt, exc)
 
         if attempt < MAX_RETRIES:
-            logger.info("⏳ Retrying in %d seconds...", backoff)
-            time.sleep(backoff)
+            logger.info("[%s] ⏳ Retry in %ds...", name, FIXED_BACKOFF_SECONDS)
+            time.sleep(FIXED_BACKOFF_SECONDS)
 
     return False
 
 
 def main() -> None:
-    """Entry point — fetch URL from env, ping, and report."""
+    """Entry point — ping all configured services."""
     logger.info("═" * 55)
     logger.info(
-        "🚀  Uptime Keeper  |  Run started at %s UTC",
+        "🚀  Uptime Keeper  |  %s UTC",
         datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
     )
     logger.info("═" * 55)
 
-    url = os.environ.get(ENV_VAR_NAME)
+    # Collect all configured URLs
+    targets = {}
+    for var in URL_ENV_VARS:
+        url = os.environ.get(var, "").strip()
+        if url:
+            if not url.startswith(("http://", "https://")):
+                url = f"https://{url}"
+            targets[var] = url
 
-    if not url:
-        logger.critical(
-            "🚫 Environment variable '%s' is not set! "
-            "Add it as a GitHub Secret and map it in the workflow.",
-            ENV_VAR_NAME,
-        )
+    if not targets:
+        logger.critical("🚫 No URLs configured! Set at least one: %s", URL_ENV_VARS)
         sys.exit(1)
 
-    # Ensure the URL has a scheme
-    if not url.startswith(("http://", "https://")):
-        url = f"https://{url}"
-        logger.info("ℹ️  No scheme detected — prepended https:// → %s", url)
+    logger.info("📡 Targets: %d services", len(targets))
+    for name, url in targets.items():
+        logger.info("  → %s: %s", name, url)
 
-    success = ping_service(url)
+    # Ping each service independently
+    results = {}
+    for name, url in targets.items():
+        logger.info("─" * 45)
+        results[name] = ping_service(name, url)
 
+    # Summary
     logger.info("═" * 55)
-    if success:
-        logger.info("🎉 Service is alive and responding!")
+    all_ok = True
+    for name, ok in results.items():
+        status = "✅ UP" if ok else "💀 DOWN"
+        logger.info("  %s: %s", name, status)
+        if not ok:
+            all_ok = False
+
+    if all_ok:
+        logger.info("🎉 All services alive!")
     else:
-        logger.error(
-            "💀 All %d ping attempts failed. Service may be unreachable.",
-            MAX_RETRIES,
-        )
-        sys.exit(1)
+        logger.error("⚠️  Some services are down!")
+        # Don't exit(1) — partial success is still useful
     logger.info("═" * 55)
 
 
