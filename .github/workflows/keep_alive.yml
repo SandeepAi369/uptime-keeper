@@ -1,49 +1,51 @@
 # ============================================================
-#  🤖 Uptime Keeper — Multi-Service Ping Workflow
+#  🤖 Keep Bot Alive — GitHub Actions Workflow
 # ============================================================
-#  Pings all free-tier services every 10 minutes to prevent
-#  auto-sleep. URLs stored as GitHub Secrets.
+#  Pings the Render-hosted bot every 1 hours to prevent the
+#  free-tier server from spinning down due to inactivity.
 #
-#  Secrets needed:
-#    RENDER_URL    — Render backend URL
-#    HF_SPACE_URL  — HuggingFace Space URL
+#  Security: The target URL is stored as a GitHub Secret
+#  (RENDER_URL) and injected at runtime — never hardcoded.
 # ============================================================
 
-name: "🤖 Uptime Keeper"
+name: "🤖 Keep Bot Alive"
 
 on:
-  # ── Scheduled: every 10 minutes ──
+  # ── Scheduled trigger: every 10 minutes ──
   schedule:
     - cron: "*/10 * * * *"
 
-  # ── Manual trigger ──
+  # ── Manual trigger from the Actions tab ──
   workflow_dispatch:
 
+# Minimal permissions for security
 permissions:
   contents: read
 
 jobs:
   keep-alive:
-    name: "🏓 Ping All Services"
+    name: "🏓 Ping Render Service"
     runs-on: ubuntu-latest
 
     steps:
+      # ── 1. Checkout repository code ──
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
+      # ── 2. Set up Python runtime ──
       - name: 🐍 Set Up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
           cache: "pip"
 
+      # ── 3. Install dependencies ──
       - name: 📦 Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: 🚀 Ping Services
+      # ── 4. Run the ping script ──
+      - name: 🚀 Ping Service
         env:
           RENDER_URL: ${{ secrets.RENDER_URL }}
-          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
         run: python main.py
-
 
